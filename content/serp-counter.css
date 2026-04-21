@@ -18,10 +18,19 @@
   user-select: none;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
+.lsp-rank-badge.lsp-rank-badge-unconfident {
+  background: #e0a43a;
+  color: #2a1a04;
+  cursor: help;
+}
 
 @media (prefers-color-scheme: dark) {
   .lsp-rank-badge {
     background: #2dd4bf;
     color: #052e2b;
+  }
+  .lsp-rank-badge.lsp-rank-badge-unconfident {
+    background: #f59e0b;
+    color: #3a2504;
   }
 }

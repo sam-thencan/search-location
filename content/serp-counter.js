@@ -17,8 +17,11 @@
 
 (function () {
   const STATE_KEY = 'state';
+  const SESSION_KEY = 'serpPages';
   const BADGE_CLASS = 'lsp-rank-badge';
+  const BADGE_UNCONFIDENT_CLASS = 'lsp-rank-badge-unconfident';
   const MARKED_ATTR = 'data-lsp-numbered';
+  const RESULTS_PER_PAGE = 10;
 
   const SKIP_ANCESTORS = [
     '[data-text-ad]',
@@ -45,6 +48,66 @@
   function getStartOffset() {
     const raw = parseInt(new URLSearchParams(location.search).get('start'), 10);
     return Number.isFinite(raw) && raw >= 0 ? raw : 0;
+  }
+
+  function getQueryKey() {
+    const raw = new URLSearchParams(location.search).get('q') || '';
+    return raw.trim().toLowerCase();
+  }
+
+  function getPageNumber() {
+    return Math.floor(getStartOffset() / RESULTS_PER_PAGE) + 1;
+  }
+
+  async function readPageHistory(query) {
+    if (!query) return {};
+    try {
+      const res = await chrome.storage.session.get(SESSION_KEY);
+      const all = res[SESSION_KEY] || {};
+      return all[query] || {};
+    } catch {
+      return {};
+    }
+  }
+
+  async function writePageHistory(query, start, entry) {
+    if (!query) return;
+    try {
+      const res = await chrome.storage.session.get(SESSION_KEY);
+      const all = res[SESSION_KEY] || {};
+      const hist = all[query] || {};
+      hist[String(start)] = { ...entry, at: Date.now() };
+      all[query] = hist;
+      await chrome.storage.session.set({ [SESSION_KEY]: all });
+    } catch (err) {
+      console.warn('[lsp] failed to persist page history:', err);
+    }
+  }
+
+  /**
+   * Decide starting rank + confidence for the current (query, start) pair.
+   *  - mode 'first'        : this is page 1 (start=0). Confident, rank 1.
+   *  - mode 'resume'       : we've already rendered this exact page. Use stored firstRank.
+   *  - mode 'continuous'   : we rendered the immediately-previous page; continue from its lastRank+1.
+   *  - mode 'gap'          : we have some history but not for the previous page. Unconfident: pN#M.
+   *  - mode 'cold'         : zero history for this query. Unconfident: pN#M.
+   */
+  async function resolveStartingRank() {
+    const start = getStartOffset();
+    const query = getQueryKey();
+    if (start === 0) {
+      return { firstRank: 1, confident: true, mode: 'first', pageNumber: 1 };
+    }
+    const hist = await readPageHistory(query);
+    const existing = hist[String(start)];
+    if (existing && existing.confident) {
+      return { firstRank: existing.firstRank, confident: true, mode: 'resume', pageNumber: getPageNumber() };
+    }
+    const prev = hist[String(start - RESULTS_PER_PAGE)];
+    if (prev && prev.confident && Number.isFinite(prev.lastRank)) {
+      return { firstRank: prev.lastRank + 1, confident: true, mode: 'continuous', pageNumber: getPageNumber() };
+    }
+    return { firstRank: 1, confident: false, mode: Object.keys(hist).length > 0 ? 'gap' : 'cold', pageNumber: getPageNumber() };
   }
 
   function isExternalLink(a) {
@@ -151,59 +214,108 @@
       .forEach((el) => el.removeAttribute(MARKED_ATTR));
   }
 
-  function highestRankSoFar() {
-    let max = 0;
-    document.querySelectorAll('[' + MARKED_ATTR + ']').forEach((el) => {
-      const v = parseInt(el.getAttribute(MARKED_ATTR), 10);
-      if (Number.isFinite(v) && v > max) max = v;
-    });
-    return max;
+  let currentResolution = null;
+
+  function markedCount() {
+    return document.querySelectorAll('[' + MARKED_ATTR + ']').length;
   }
 
-  function renderBadges() {
+  async function renderBadges() {
     if (!enabled) return;
     const allH3s = findOrganicH3s();
     const unmarked = allH3s.filter((h) => !h.hasAttribute(MARKED_ATTR));
     if (unmarked.length === 0) return;
 
-    const existingMax = highestRankSoFar();
-    let n = existingMax > 0 ? existingMax : getStartOffset();
+    if (!currentResolution) {
+      currentResolution = await resolveStartingRank();
+    }
+
+    const already = markedCount();
+    const { firstRank, confident, pageNumber } = currentResolution;
+    let n = firstRank + already - 1;
+
     for (const h3 of unmarked) {
       n++;
+      const perPage = n - firstRank + 1;
       const badge = document.createElement('span');
-      badge.className = BADGE_CLASS;
-      badge.textContent = '#' + n;
+      badge.className = confident ? BADGE_CLASS : BADGE_CLASS + ' ' + BADGE_UNCONFIDENT_CLASS;
+      badge.textContent = confident ? '#' + n : 'p' + pageNumber + '#' + perPage;
       badge.setAttribute('aria-hidden', 'true');
+      if (!confident) {
+        badge.title =
+          'Position-on-page only — we don\'t have the earlier pages in session, so the absolute rank is unknown.';
+      }
       h3.insertBefore(badge, h3.firstChild);
-      h3.setAttribute(MARKED_ATTR, String(n));
+      h3.setAttribute(MARKED_ATTR, confident ? String(n) : pageNumber + ':' + perPage);
     }
+
+    await persistCurrentPage(n);
   }
 
-  function renumberFromScratch() {
+  async function persistCurrentPage(lastRank) {
+    if (!currentResolution) return;
+    const { firstRank, confident } = currentResolution;
+    await writePageHistory(getQueryKey(), getStartOffset(), {
+      firstRank,
+      lastRank,
+      confident
+    });
+  }
+
+  async function renumberFromScratch() {
     clearBadges();
-    renderBadges();
+    currentResolution = null;
+    await renderBadges();
   }
 
   function scheduleRender() {
     if (pendingTimer) return;
-    pendingTimer = setTimeout(() => {
+    pendingTimer = setTimeout(async () => {
       pendingTimer = null;
       if (location.href !== lastUrl) {
         lastUrl = location.href;
-        renumberFromScratch();
+        await renumberFromScratch();
       } else {
-        renderBadges();
+        await renderBadges();
       }
     }, 120);
   }
 
-  function start() {
+  async function start() {
     if (observer) return;
     lastUrl = location.href;
-    renderBadges();
+    currentResolution = null;
+    await renderBadges();
+    logStartupDiagnostic();
     observer = new MutationObserver(scheduleRender);
     observer.observe(document.body, { childList: true, subtree: true });
     window.addEventListener('popstate', renumberFromScratch);
+  }
+
+  function logStartupDiagnostic() {
+    try {
+      const organic = findOrganicH3s();
+      const info = {
+        url: location.href,
+        query: getQueryKey() || '(no q)',
+        start: getStartOffset(),
+        page: getPageNumber(),
+        resolvedRank: currentResolution?.firstRank,
+        mode: currentResolution?.mode,
+        confident: currentResolution?.confident,
+        matchedOrganic: organic.length,
+        totalH3s: document.querySelectorAll('h3').length
+      };
+      console.log('%c[Local SERP]%c counter active', 'color:#14b8a6;font-weight:bold', 'color:inherit', info);
+      if (organic.length === 0 && info.totalH3s > 0) {
+        console.warn(
+          '[Local SERP] No organic results matched despite ' + info.totalH3s + ' <h3>s present. ' +
+          'Run window.__lspDebug() in the ISOLATED world console (DevTools Console → context dropdown → select the extension) for a full dump.'
+        );
+      }
+    } catch (err) {
+      console.warn('[Local SERP] diagnostic failed:', err);
+    }
   }
 
   function stop() {

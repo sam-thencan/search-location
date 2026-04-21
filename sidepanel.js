@@ -1,6 +1,6 @@
 import { geocodeAddress, reverseGeocode, autocomplete, GeocodeError } from './lib/geocode.js';
 import { getState, updateState, DEFAULTS } from './lib/storage.js';
-import { encodeUuleV2 } from './lib/uule.js';
+import { encodeUuleV2, encodeUuleV1UrlParam } from './lib/uule.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -296,11 +296,20 @@ async function refreshUulePreview() {
   }
   els.uulePreview.value = encoded.header;
   els.uuleBody.value = encoded.body;
-  await refreshShareUrl(encoded.urlParam);
+  await refreshShareUrl();
 }
 
-async function refreshShareUrl(urlParam) {
-  if (!urlParam) {
+async function refreshShareUrl() {
+  const address = els.address.value.trim();
+  if (!address) {
+    els.shareUrl.value = '';
+    return;
+  }
+  let uuleV1;
+  try {
+    uuleV1 = encodeUuleV1UrlParam(address);
+  } catch (err) {
+    console.warn('[lsp] uule v1 encode failed', err);
     els.shareUrl.value = '';
     return;
   }
@@ -319,7 +328,7 @@ async function refreshShareUrl(urlParam) {
   }
   const params = new URLSearchParams();
   if (q) params.set('q', q);
-  params.set('uule', urlParam);
+  params.set('uule', uuleV1);
   if (hl) params.set('hl', hl);
   if (gl) params.set('gl', gl);
   els.shareUrl.value = 'https://www.google.com/search?' + params.toString();

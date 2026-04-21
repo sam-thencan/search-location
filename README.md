@@ -35,7 +35,9 @@ Requires Chrome 116+ (Side Panel API GA).
 
 **Saving presets.** Fill the form, click **Save as preset**, give it a name (e.g. `Client — Portland Dentist`). Switch clients in one click from the **Load preset…** dropdown.
 
-**SERP counter.** Flip the **Number organic results on Google SERPs** toggle to overlay rank badges on each organic result. Numbering continues across pagination — if page 1 had 10 results, page 2 starts at `#11` (derived from Google's `start=` URL param). Ads, local pack, AI Overview, and "People also ask" blocks are skipped.
+**SERP counter.** Flip the **Number organic results on Google SERPs** toggle to overlay rank badges on each organic result. Numbering uses observed continuity — if page 1 had 8 organic results (AI Overview, featured snippets, etc. eat some slots), page 2 starts at `#9`, not `#11`. The counter stores per-query page history in `chrome.storage.session` so natural `1 → 2 → 3` walks carry forward.
+
+If you jump straight into a later page with no prior history, badges switch to an amber `pN#M` format (e.g. `p3#1, p3#2`) to signal that only the within-page position is trustworthy. Once you visit earlier pages, subsequent loads of the later page auto-heal to the confident `#N` format. Ads, local pack, AI Overview, featured snippets, and "People also ask" blocks are skipped.
 
 **Address autocomplete.** Start typing in the address field — suggestions from Nominatim appear after ~350 ms. Arrow keys to navigate, `Enter` to pick, `Esc` to dismiss. If spoof is already on, picking a suggestion re-applies immediately.
 

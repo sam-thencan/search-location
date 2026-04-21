@@ -67,12 +67,23 @@ const COOKIE_URLS = [
   'https://www.google.co.nz/'
 ];
 
+async function allowSessionStorageInContentScripts() {
+  try {
+    await chrome.storage.session.setAccessLevel({
+      accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS'
+    });
+  } catch (err) {
+    console.warn('[bg] session setAccessLevel failed:', err);
+  }
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   try {
     await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   } catch (err) {
     console.warn('setPanelBehavior failed:', err);
   }
+  await allowSessionStorageInContentScripts();
   const state = await getState();
   const on = !!(state.activeState?.enabled && state.activeState.lat != null && state.activeState.lng != null);
   if (on) await applyRule(state.activeState);
@@ -227,6 +238,7 @@ async function clearUuleCookies() {
 
 (async () => {
   try {
+    await allowSessionStorageInContentScripts();
     const state = await getState();
     const on = !!(
       state.activeState?.enabled &&
@@ -235,6 +247,6 @@ async function clearUuleCookies() {
     );
     await setActionState(on);
   } catch (err) {
-    console.warn('[bg] initial icon sync failed:', err);
+    console.warn('[bg] initial sync failed:', err);
   }
 })();

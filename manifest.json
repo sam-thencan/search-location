@@ -30,7 +30,14 @@
   ],
   "side_panel": { "default_path": "sidepanel.html" },
   "background": { "service_worker": "background.js", "type": "module" },
-  "action": { "default_title": "Local SERP Side Panel" },
+  "action": {
+    "default_title": "Local SERP Side Panel (off)",
+    "default_icon": {
+      "16": "icons/icon16-off.png",
+      "48": "icons/icon48-off.png",
+      "128": "icons/icon128-off.png"
+    }
+  },
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

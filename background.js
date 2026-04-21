@@ -26,6 +26,30 @@ const GOOGLE_DOMAINS = [
   'google.co.nz', 'www.google.co.nz'
 ];
 
+const ICONS = {
+  on: {
+    16: 'icons/icon16.png',
+    48: 'icons/icon48.png',
+    128: 'icons/icon128.png'
+  },
+  off: {
+    16: 'icons/icon16-off.png',
+    48: 'icons/icon48-off.png',
+    128: 'icons/icon128-off.png'
+  }
+};
+
+async function setActionState(enabled) {
+  try {
+    await chrome.action.setIcon({ path: enabled ? ICONS.on : ICONS.off });
+    await chrome.action.setTitle({
+      title: enabled ? 'Local SERP Side Panel (ACTIVE)' : 'Local SERP Side Panel (off)'
+    });
+  } catch (err) {
+    console.warn('setActionState failed:', err);
+  }
+}
+
 const COOKIE_URLS = [
   'https://www.google.com/',
   'https://google.com/',
@@ -50,18 +74,20 @@ chrome.runtime.onInstalled.addListener(async () => {
     console.warn('setPanelBehavior failed:', err);
   }
   const state = await getState();
-  if (state.activeState?.enabled && state.activeState.lat != null && state.activeState.lng != null) {
-    await applyRule(state.activeState);
-  }
+  const on = !!(state.activeState?.enabled && state.activeState.lat != null && state.activeState.lng != null);
+  if (on) await applyRule(state.activeState);
+  await setActionState(on);
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   const state = await getState();
-  if (state.activeState?.enabled && state.activeState.lat != null && state.activeState.lng != null) {
+  const on = !!(state.activeState?.enabled && state.activeState.lat != null && state.activeState.lng != null);
+  if (on) {
     await applyRule(state.activeState);
   } else {
     await removeRule();
   }
+  await setActionState(on);
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -117,6 +143,7 @@ async function enable(activeState) {
     advanced: { ...current.activeState.advanced, ...(advanced || {}) }
   };
   await setState(current);
+  await setActionState(true);
   const { header, body } = encodeUuleV2({
     lat: Number(lat),
     lng: Number(lng),
@@ -172,6 +199,7 @@ async function disable() {
   const current = await getState();
   current.activeState = { ...current.activeState, enabled: false };
   await setState(current);
+  await setActionState(false);
 }
 
 async function clearUuleCookies() {

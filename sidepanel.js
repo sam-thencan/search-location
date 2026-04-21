@@ -220,6 +220,15 @@ async function onGeocode() {
     els.lng.value = hit.lng;
     els.address.value = hit.address;
     await persistFormToState();
+    if (state.activeState?.enabled) {
+      const form = readForm();
+      const res = await chrome.runtime.sendMessage({ type: 'ENABLE', payload: form });
+      if (res?.ok) {
+        showToast(`Spoof moved to ${hit.address.split(',')[0]}.`);
+      } else {
+        showToast(res?.error || 'Failed to re-apply spoof.', true);
+      }
+    }
   } catch (err) {
     const msg = err instanceof GeocodeError ? err.message : 'Geocoding failed.';
     els.addressError.textContent = msg;

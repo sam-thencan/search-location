@@ -28,6 +28,7 @@ const els = {
   googleKey: $('google-key'),
   uulePreview: $('uule-preview'),
   uuleBody: $('uule-body'),
+  serpCounter: $('serp-counter-toggle'),
   toast: $('toast')
 };
 
@@ -76,6 +77,7 @@ function hydrateFromState({ skipInputs } = {}) {
     els.role.value = a.advanced?.role || '';
     els.producer.value = a.advanced?.producer || '';
     els.googleKey.value = state.settings?.googleGeocodingApiKey || '';
+    els.serpCounter.checked = !!state.settings?.showSerpCounter;
   }
   renderPresets();
 }
@@ -158,6 +160,14 @@ function attachListeners() {
       ...s,
       settings: { ...s.settings, googleGeocodingApiKey: els.googleKey.value.trim() }
     }));
+  });
+
+  els.serpCounter.addEventListener('change', async () => {
+    state = await updateState((s) => ({
+      ...s,
+      settings: { ...s.settings, showSerpCounter: els.serpCounter.checked }
+    }));
+    showToast(els.serpCounter.checked ? 'SERP counter on.' : 'SERP counter off.');
   });
 
   els.geocodeBtn.addEventListener('click', onGeocode);

@@ -35,6 +35,8 @@ Requires Chrome 116+ (Side Panel API GA).
 
 **Saving presets.** Fill the form, click **Save as preset**, give it a name (e.g. `Client — Portland Dentist`). Switch clients in one click from the **Load preset…** dropdown.
 
+**SERP counter.** Flip the **Number organic results on Google SERPs** toggle to overlay rank badges on each organic result. Numbering continues across pagination — if page 1 had 10 results, page 2 starts at `#11` (derived from Google's `start=` URL param). Ads, local pack, and "People also ask" blocks are skipped.
+
 **Advanced.** Expand the Advanced section to:
 
 - Adjust the `radius` (default `65000`, matching Valentin's shipping extension).

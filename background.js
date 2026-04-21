@@ -28,14 +28,14 @@ const GOOGLE_DOMAINS = [
 
 const ICONS = {
   on: {
-    16: 'icons/icon16.png',
-    48: 'icons/icon48.png',
-    128: 'icons/icon128.png'
+    '16': 'icons/icon16.png',
+    '48': 'icons/icon48.png',
+    '128': 'icons/icon128.png'
   },
   off: {
-    16: 'icons/icon16-off.png',
-    48: 'icons/icon48-off.png',
-    128: 'icons/icon128-off.png'
+    '16': 'icons/icon16-off.png',
+    '48': 'icons/icon48-off.png',
+    '128': 'icons/icon128-off.png'
   }
 };
 
@@ -90,6 +90,21 @@ chrome.runtime.onStartup.addListener(async () => {
   await setActionState(on);
 });
 
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== 'toggle-spoof') return;
+  const state = await getState();
+  if (state.activeState?.enabled) {
+    await disable();
+  } else {
+    const a = state.activeState;
+    if (a?.lat == null || a?.lng == null) {
+      console.warn('[bg] toggle shortcut pressed but no lat/lng configured');
+      return;
+    }
+    await enable(a);
+  }
+});
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   handleMessage(msg).then(sendResponse).catch((err) => {
     console.error('[bg] handler error', err);
@@ -110,8 +125,8 @@ async function handleMessage(msg) {
     }
     case 'PREVIEW_UULE': {
       const { lat, lng, radius, exactMode } = msg.payload || {};
-      const { header, body } = encodeUuleV2({ lat, lng, radius, exactMode });
-      return { ok: true, header, body };
+      const { header, body, urlParam } = encodeUuleV2({ lat, lng, radius, exactMode });
+      return { ok: true, header, body, urlParam };
     }
     case 'GET_STATE': {
       const state = await getState();
@@ -209,3 +224,17 @@ async function clearUuleCookies() {
     )
   );
 }
+
+(async () => {
+  try {
+    const state = await getState();
+    const on = !!(
+      state.activeState?.enabled &&
+      state.activeState.lat != null &&
+      state.activeState.lng != null
+    );
+    await setActionState(on);
+  } catch (err) {
+    console.warn('[bg] initial icon sync failed:', err);
+  }
+})();

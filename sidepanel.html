@@ -18,18 +18,22 @@
         <input type="checkbox" id="enable-toggle" />
         <span class="slider"></span>
       </label>
-      <div>
+      <div class="toggle-text">
         <div class="toggle-label" id="toggle-label">Spoof Location</div>
         <div class="muted small" id="toggle-sub">Off</div>
       </div>
     </section>
+    <div id="tab-status" class="tab-status" hidden></div>
 
     <section class="section">
       <h2>Location</h2>
       <div class="field">
         <label for="address">Address</label>
         <div class="row">
-          <input type="text" id="address" placeholder="Times Square, New York" autocomplete="off" />
+          <div class="ac-wrapper">
+            <input type="text" id="address" placeholder="Times Square, New York" autocomplete="off" spellcheck="false" />
+            <ul id="ac-list" class="ac-list" hidden></ul>
+          </div>
           <button id="geocode-btn" class="btn">Geocode</button>
         </div>
         <div class="error" id="address-error" hidden></div>
@@ -104,6 +108,24 @@
         <summary>Manage presets</summary>
         <ul id="preset-list" class="preset-list"></ul>
       </details>
+      <div class="field" id="recents-field" hidden>
+        <label>Recent</label>
+        <div id="recents-row" class="recents-row"></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Share</h2>
+      <div class="field">
+        <label for="share-url">Shareable SERP URL</label>
+        <div class="row">
+          <input type="text" id="share-url" readonly placeholder="Set a location first" />
+          <button id="copy-url-btn" class="btn">Copy</button>
+        </div>
+        <div class="muted small">
+          Uses the <code>uule</code> URL param — recipients don't need this extension.
+        </div>
+      </div>
     </section>
 
     <section class="section">

@@ -29,6 +29,15 @@
     "*://maps.googleapis.com/*"
   ],
   "side_panel": { "default_path": "sidepanel.html" },
+  "commands": {
+    "toggle-spoof": {
+      "suggested_key": {
+        "default": "Alt+Shift+L",
+        "mac": "Alt+Shift+L"
+      },
+      "description": "Toggle location spoof on/off"
+    }
+  },
   "background": { "service_worker": "background.js", "type": "module" },
   "content_scripts": [
     {

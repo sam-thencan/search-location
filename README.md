@@ -35,7 +35,17 @@ Requires Chrome 116+ (Side Panel API GA).
 
 **Saving presets.** Fill the form, click **Save as preset**, give it a name (e.g. `Client — Portland Dentist`). Switch clients in one click from the **Load preset…** dropdown.
 
-**SERP counter.** Flip the **Number organic results on Google SERPs** toggle to overlay rank badges on each organic result. Numbering continues across pagination — if page 1 had 10 results, page 2 starts at `#11` (derived from Google's `start=` URL param). Ads, local pack, and "People also ask" blocks are skipped.
+**SERP counter.** Flip the **Number organic results on Google SERPs** toggle to overlay rank badges on each organic result. Numbering continues across pagination — if page 1 had 10 results, page 2 starts at `#11` (derived from Google's `start=` URL param). Ads, local pack, AI Overview, and "People also ask" blocks are skipped.
+
+**Address autocomplete.** Start typing in the address field — suggestions from Nominatim appear after ~350 ms. Arrow keys to navigate, `Enter` to pick, `Esc` to dismiss. If spoof is already on, picking a suggestion re-applies immediately.
+
+**Recent locations.** Every successful geocode / autocomplete pick is captured as a chip (last 5, deduped). Click a chip to restore that location — if spoof is active it re-applies in place.
+
+**Share URL.** The **Share** section builds a `google.com/search?uule=…&hl=…&gl=…&q=…` URL you can copy and send to a client. Recipients don't need the extension; Google honors the `uule` URL param on its own. If you're currently on a Google search tab, the URL inherits that tab's query; otherwise you can append `&q=` yourself.
+
+**Keyboard shortcut.** `Alt+Shift+L` toggles the spoof on/off (configurable at `chrome://extensions/shortcuts`). Requires lat/lng already configured.
+
+**Tab-aware status.** A small chip below the toggle tells you whether the currently-focused tab is a Google SERP. Teal = spoof is reaching that tab; amber = you're on a non-Google tab, spoof isn't doing anything there.
 
 **Advanced.** Expand the Advanced section to:
 

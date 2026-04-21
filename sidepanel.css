@@ -100,9 +100,38 @@ h2 {
   background: var(--input-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 6px;
 }
+.toggle-text { flex: 1; min-width: 0; }
 .toggle-label { font-weight: 600; }
+
+.tab-status {
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab-status.ok {
+  color: var(--accent-strong);
+  border-color: var(--accent);
+}
+.tab-status.warn {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.tab-status .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
 
 .switch {
   position: relative;
@@ -187,6 +216,46 @@ input:focus, select:focus, textarea:focus {
 .row > * { flex: 1; }
 .row.two { align-items: stretch; }
 
+.ac-wrapper {
+  position: relative;
+  flex: 1;
+}
+.ac-list {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  max-height: 260px;
+  overflow-y: auto;
+  z-index: 30;
+}
+.ac-list li {
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--fg);
+}
+.ac-list li.active,
+.ac-list li:hover {
+  background: var(--input-focus);
+}
+.ac-list .ac-label {
+  line-height: 1.3;
+}
+.ac-list .ac-meta {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 1px;
+  text-transform: capitalize;
+}
+
 .btn {
   padding: 6px 12px;
   background: var(--fg);
@@ -209,6 +278,13 @@ input:focus, select:focus, textarea:focus {
 
 .muted { color: var(--muted); }
 .small { font-size: 11px; }
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  padding: 0 3px;
+  background: var(--input-bg);
+  border-radius: 3px;
+}
 .error {
   color: var(--danger);
   font-size: 11px;
@@ -251,6 +327,31 @@ details > summary::-webkit-details-marker { color: var(--muted); }
 .preset-list button.del:hover {
   color: var(--danger);
   border-color: var(--danger);
+}
+
+.recents-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.recent-chip {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: inherit;
+}
+.recent-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
 }
 
 .toast {

@@ -62,48 +62,40 @@
     return true;
   }
 
-  function resolveH3ForCluster(cluster) {
-    if (cluster.tagName === 'H3') return cluster;
-    return cluster.querySelector('h3');
-  }
-
-  function resolveLinkForH3(h3, cluster) {
-    return (
-      h3.closest('a[href]') ||
-      (cluster && cluster.querySelector('a[href]')) ||
-      h3.parentElement?.querySelector('a[href]') ||
-      null
-    );
+  function findLinkedAnchor(h3) {
+    const closestA = h3.closest('a[href]');
+    if (closestA) return closestA;
+    let node = h3.parentElement;
+    for (let depth = 0; node && depth < 5; depth++) {
+      const a = node.querySelector(':scope > a[href], :scope a[href]');
+      if (a) return a;
+      node = node.parentElement;
+    }
+    return null;
   }
 
   function findOrganicH3s() {
     const root =
       document.querySelector('#rso') ||
       document.querySelector('#search') ||
+      document.querySelector('#center_col') ||
       document.body;
-
-    const candidates = [
-      ...root.querySelectorAll('div.yuRUbf'),
-      ...root.querySelectorAll('div.MjjYud'),
-      ...root.querySelectorAll('a > h3')
-    ];
 
     const seen = new Set();
     const out = [];
 
-    for (const cluster of candidates) {
-      const h3 = resolveH3ForCluster(cluster);
-      if (!h3 || seen.has(h3)) continue;
-      seen.add(h3);
+    for (const h3 of root.querySelectorAll('h3')) {
+      if (seen.has(h3)) continue;
       if (!h3.textContent.trim()) continue;
       if (SKIP_ANCESTORS.some((sel) => h3.closest(sel))) continue;
 
-      const a = resolveLinkForH3(h3, cluster);
+      const a = findLinkedAnchor(h3);
       if (!isExternalLink(a)) continue;
 
       const rect = h3.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) continue;
 
+      seen.add(h3);
       out.push(h3);
     }
 
@@ -115,6 +107,41 @@
     });
 
     return out;
+  }
+
+  function debugDump() {
+    const allH3s = Array.from(document.querySelectorAll('h3'));
+    const organic = findOrganicH3s();
+    return {
+      enabled,
+      url: location.href,
+      startOffset: getStartOffset(),
+      totalH3s: allH3s.length,
+      matchedOrganic: organic.length,
+      organicTexts: organic.map((h) => h.textContent.trim().slice(0, 60)),
+      rejectedH3s: allH3s
+        .filter((h) => !organic.includes(h))
+        .map((h) => {
+          const a = findLinkedAnchor(h);
+          const skip = SKIP_ANCESTORS.find((sel) => h.closest(sel));
+          return {
+            text: h.textContent.trim().slice(0, 60),
+            hasAnchor: !!a,
+            anchorExternal: !!a && isExternalLink(a),
+            anchorHref: a?.href || null,
+            skippedBy: skip || null,
+            zeroSize:
+              h.getBoundingClientRect().width === 0 &&
+              h.getBoundingClientRect().height === 0,
+            parentTag: h.parentElement?.tagName,
+            parentClass: h.parentElement?.className || null
+          };
+        })
+    };
+  }
+
+  if (typeof window !== 'undefined') {
+    window.__lspDebug = debugDump;
   }
 
   function clearBadges() {

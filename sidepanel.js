@@ -1,5 +1,6 @@
 import { geocodeAddress, reverseGeocode, autocomplete, GeocodeError } from './lib/geocode.js';
 import { getState, updateState, DEFAULTS } from './lib/storage.js';
+import { encodeUuleV2 } from './lib/uule.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -281,18 +282,28 @@ async function refreshUulePreview() {
     return;
   }
   const radius = parseInt(els.radius.value, 10);
-  const res = await chrome.runtime.sendMessage({
-    type: 'PREVIEW_UULE',
-    payload: { lat, lng, radius, exactMode: els.exactMode.checked }
-  });
-  if (res?.ok) {
-    els.uulePreview.value = res.header;
-    els.uuleBody.value = res.body;
-    await refreshShareUrl(res.urlParam);
+  let encoded;
+  try {
+    encoded = encodeUuleV2({
+      lat,
+      lng,
+      radius: Number.isFinite(radius) ? radius : undefined,
+      exactMode: els.exactMode.checked
+    });
+  } catch (err) {
+    console.warn('[lsp] uule encode failed', err);
+    return;
   }
+  els.uulePreview.value = encoded.header;
+  els.uuleBody.value = encoded.body;
+  await refreshShareUrl(encoded.urlParam);
 }
 
 async function refreshShareUrl(urlParam) {
+  if (!urlParam) {
+    els.shareUrl.value = '';
+    return;
+  }
   const { hl, gl } = readHlGl();
   let q = '';
   try {

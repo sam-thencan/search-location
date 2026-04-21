@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Local SERP Side Panel",
+  "version": "1.0.0",
+  "description": "Spoof Google Search location via a side panel. Based on Valentin Pletzer's UULE / X-Geo research.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "declarativeNetRequest",
+    "cookies",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*.google.com/*",
+    "*://*.google.co.uk/*",
+    "*://*.google.de/*",
+    "*://*.google.fr/*",
+    "*://*.google.ca/*",
+    "*://*.google.com.au/*",
+    "*://*.google.es/*",
+    "*://*.google.it/*",
+    "*://*.google.com.mx/*",
+    "*://*.google.com.br/*",
+    "*://*.google.co.in/*",
+    "*://*.google.co.jp/*",
+    "*://*.google.co.nz/*",
+    "*://nominatim.openstreetmap.org/*",
+    "*://maps.googleapis.com/*"
+  ],
+  "side_panel": { "default_path": "sidepanel.html" },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "Local SERP Side Panel" },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -438,9 +438,11 @@ details > summary::-webkit-details-marker { color: var(--muted); }
   border-color: var(--accent);
 }
 .icon-btn svg {
-  display: block;
   width: 14px;
   height: 14px;
+}
+.icon-btn svg[hidden] {
+  display: none;
 }
 
 .app-header {

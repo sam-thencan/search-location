@@ -2,6 +2,7 @@
 node_modules/
 dist/
 *.zip
+screenshots/
 __pycache__/
 *.pyc
 .env

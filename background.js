@@ -245,6 +245,9 @@ async function clearUuleCookies() {
       state.activeState.lat != null &&
       state.activeState.lng != null
     );
+    if (on) {
+      await applyRule(state.activeState);
+    }
     await setActionState(on);
   } catch (err) {
     console.warn('[bg] initial sync failed:', err);

@@ -315,12 +315,15 @@ async function refreshShareUrl() {
   }
   const { hl, gl } = readHlGl();
   let q = '';
+  let start = null;
   try {
     const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
     if (tab?.url) {
       const u = new URL(tab.url);
       if (u.hostname.includes('google.') && u.pathname.startsWith('/search')) {
         q = u.searchParams.get('q') || '';
+        const rawStart = parseInt(u.searchParams.get('start'), 10);
+        if (Number.isFinite(rawStart) && rawStart > 0) start = rawStart;
       }
     }
   } catch {
@@ -331,6 +334,7 @@ async function refreshShareUrl() {
   params.set('uule', uuleV1);
   if (hl) params.set('hl', hl);
   if (gl) params.set('gl', gl);
+  if (start != null) params.set('start', String(start));
   els.shareUrl.value = 'https://www.google.com/search?' + params.toString();
 }
 

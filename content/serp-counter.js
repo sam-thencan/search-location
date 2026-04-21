@@ -84,6 +84,29 @@
     }
   }
 
+  async function clearQueryHistory(query) {
+    if (!query) return;
+    try {
+      const res = await chrome.storage.session.get(SESSION_KEY);
+      const all = res[SESSION_KEY] || {};
+      if (all[query]) {
+        delete all[query];
+        await chrome.storage.session.set({ [SESSION_KEY]: all });
+      }
+    } catch (err) {
+      console.warn('[lsp] failed to clear page history:', err);
+    }
+  }
+
+  function isReload() {
+    try {
+      const nav = performance.getEntriesByType('navigation')[0];
+      return nav?.type === 'reload';
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Decide starting rank + confidence for the current (query, start) pair.
    *  - mode 'first'        : this is page 1 (start=0). Confident, rank 1.
@@ -265,6 +288,9 @@
   async function renumberFromScratch() {
     clearBadges();
     currentResolution = null;
+    if (getStartOffset() === 0) {
+      await clearQueryHistory(getQueryKey());
+    }
     await renderBadges();
   }
 
@@ -285,11 +311,20 @@
     if (observer) return;
     lastUrl = location.href;
     currentResolution = null;
+    await maybeResetHistory();
     await renderBadges();
     logStartupDiagnostic();
     observer = new MutationObserver(scheduleRender);
     observer.observe(document.body, { childList: true, subtree: true });
     window.addEventListener('popstate', renumberFromScratch);
+  }
+
+  async function maybeResetHistory() {
+    const query = getQueryKey();
+    if (!query) return;
+    if (isReload() || getStartOffset() === 0) {
+      await clearQueryHistory(query);
+    }
   }
 
   function logStartupDiagnostic() {

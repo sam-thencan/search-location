@@ -127,21 +127,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 async function handleMessage(msg) {
   switch (msg?.type) {
     case 'ENABLE': {
-      const result = await enable(msg.payload);
-      return { ok: true, ...result };
+      await enable(msg.payload);
+      return { ok: true };
     }
     case 'DISABLE': {
       await disable();
       return { ok: true };
-    }
-    case 'PREVIEW_UULE': {
-      const { lat, lng, radius, exactMode } = msg.payload || {};
-      const { header, body, urlParam } = encodeUuleV2({ lat, lng, radius, exactMode });
-      return { ok: true, header, body, urlParam };
-    }
-    case 'GET_STATE': {
-      const state = await getState();
-      return { ok: true, state };
     }
     default:
       return { ok: false, error: `Unknown message type: ${msg?.type}` };
@@ -170,13 +161,6 @@ async function enable(activeState) {
   };
   await setState(current);
   await setActionState(true);
-  const { header, body } = encodeUuleV2({
-    lat: Number(lat),
-    lng: Number(lng),
-    radius,
-    exactMode: advanced?.exactMode
-  });
-  return { header, body };
 }
 
 async function applyRule(activeState) {

@@ -1,6 +1,6 @@
 import { geocodeAddress, reverseGeocode, autocomplete, GeocodeError } from './lib/geocode.js';
-import { getState, updateState, DEFAULTS } from './lib/storage.js';
-import { encodeUuleV2, encodeUuleV1UrlParam } from './lib/uule.js';
+import { getState, updateState } from './lib/storage.js';
+import { encodeUuleV2 } from './lib/uule.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -33,8 +33,6 @@ const els = {
   acList: $('ac-list'),
   recentsField: $('recents-field'),
   recentsRow: $('recents-row'),
-  shareUrl: $('share-url'),
-  copyUrlBtn: $('copy-url-btn'),
   tabStatus: $('tab-status'),
   themeToggle: $('theme-toggle'),
   themeIconDark: $('theme-icon-dark'),
@@ -82,9 +80,6 @@ async function refreshTabStatus() {
     const kind = classifyTab(tab?.url);
     const enabled = !!state?.activeState?.enabled;
     applyTabStatus(kind, enabled);
-    if (els.shareUrl.value || kind === 'google-search') {
-      await refreshUulePreview();
-    }
   } catch {
     els.tabStatus.hidden = true;
   }
@@ -250,24 +245,7 @@ function attachListeners() {
   els.presetSelect.addEventListener('change', onPresetSelect);
   els.savePresetBtn.addEventListener('click', onSavePreset);
 
-  els.copyUrlBtn.addEventListener('click', onCopyShareUrl);
   els.themeToggle?.addEventListener('click', onThemeToggle);
-}
-
-async function onCopyShareUrl() {
-  const url = els.shareUrl.value;
-  if (!url) {
-    showToast('Set a location first.', true);
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(url);
-    showToast('Share URL copied.');
-  } catch {
-    els.shareUrl.select();
-    document.execCommand('copy');
-    showToast('Share URL copied.');
-  }
 }
 
 async function persistFormToState() {
@@ -285,7 +263,6 @@ async function refreshUulePreview() {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     els.uulePreview.value = '(enter lat/lng to see preview)';
     els.uuleBody.value = '';
-    els.shareUrl.value = '';
     return;
   }
   const radius = parseInt(els.radius.value, 10);
@@ -303,46 +280,6 @@ async function refreshUulePreview() {
   }
   els.uulePreview.value = encoded.header;
   els.uuleBody.value = encoded.body;
-  await refreshShareUrl();
-}
-
-async function refreshShareUrl() {
-  const address = els.address.value.trim();
-  if (!address) {
-    els.shareUrl.value = '';
-    return;
-  }
-  let uuleV1;
-  try {
-    uuleV1 = encodeUuleV1UrlParam(address);
-  } catch (err) {
-    console.warn('[lsp] uule v1 encode failed', err);
-    els.shareUrl.value = '';
-    return;
-  }
-  const { hl, gl } = readHlGl();
-  let q = '';
-  let start = null;
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (tab?.url) {
-      const u = new URL(tab.url);
-      if (u.hostname.includes('google.') && u.pathname.startsWith('/search')) {
-        q = u.searchParams.get('q') || '';
-        const rawStart = parseInt(u.searchParams.get('start'), 10);
-        if (Number.isFinite(rawStart) && rawStart > 0) start = rawStart;
-      }
-    }
-  } catch {
-    /* no tab access is fine */
-  }
-  const params = new URLSearchParams();
-  if (q) params.set('q', q);
-  params.set('uule', uuleV1);
-  if (hl) params.set('hl', hl);
-  if (gl) params.set('gl', gl);
-  if (start != null) params.set('start', String(start));
-  els.shareUrl.value = 'https://www.google.com/search?' + params.toString();
 }
 
 async function onGeocode() {

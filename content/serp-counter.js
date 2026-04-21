@@ -341,7 +341,7 @@
         matchedOrganic: organic.length,
         totalH3s: document.querySelectorAll('h3').length
       };
-      console.log('%c[Local SERP]%c counter active', 'color:#14b8a6;font-weight:bold', 'color:inherit', info);
+      console.log('%c[Local SERP]%c counter active', 'color:#EF6A47;font-weight:bold', 'color:inherit', info);
       if (organic.length === 0 && info.totalH3s > 0) {
         console.warn(
           '[Local SERP] No organic results matched despite ' + info.totalH3s + ' <h3>s present. ' +

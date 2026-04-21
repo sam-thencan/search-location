@@ -43,8 +43,6 @@ If you jump straight into a later page with no prior history, badges switch to a
 
 **Recent locations.** Every successful geocode / autocomplete pick is captured as a chip (last 5, deduped). Click a chip to restore that location — if spoof is active it re-applies in place.
 
-**Share URL.** The **Share** section builds a `google.com/search?uule=…&hl=…&gl=…&q=…` URL you can copy and send to a client. Recipients don't need the extension; Google honors the `uule` URL param on its own. If you're currently on a Google search tab, the URL inherits that tab's query; otherwise you can append `&q=` yourself.
-
 **Keyboard shortcut.** `Alt+Shift+L` toggles the spoof on/off (configurable at `chrome://extensions/shortcuts`). Requires lat/lng already configured.
 
 **Tab-aware status.** A small chip below the toggle tells you whether the currently-focused tab is a Google SERP. Teal = spoof is reaching that tab; amber = you're on a non-Google tab, spoof isn't doing anything there.

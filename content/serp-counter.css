@@ -7,7 +7,7 @@
   padding: 0 6px;
   margin-right: 8px;
   border-radius: 4px;
-  background: #14b8a6;
+  background: #EF6A47;
   color: #ffffff;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-size: 11px;
@@ -19,18 +19,7 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 .lsp-rank-badge.lsp-rank-badge-unconfident {
-  background: #e0a43a;
-  color: #2a1a04;
+  background: #416184;
+  color: #ffffff;
   cursor: help;
-}
-
-@media (prefers-color-scheme: dark) {
-  .lsp-rank-badge {
-    background: #2dd4bf;
-    color: #052e2b;
-  }
-  .lsp-rank-badge.lsp-rank-badge-unconfident {
-    background: #f59e0b;
-    color: #3a2504;
-  }
 }

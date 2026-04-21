@@ -10,11 +10,11 @@ import os
 OUT = os.path.join(os.path.dirname(__file__), "..", "icons")
 os.makedirs(OUT, exist_ok=True)
 
-BG_ACTIVE = (15, 23, 42, 255)        # slate-900
-ACCENT_ACTIVE = (20, 184, 166, 255)  # teal-500
+BG_ACTIVE = (0, 0, 0, 255)           # black
+ACCENT_ACTIVE = (239, 106, 71, 255)  # #EF6A47 brand orange
 WHITE = (255, 255, 255, 255)
 
-OUTLINE_OFF = (148, 163, 184, 255)   # slate-400 (readable on light + dark toolbars)
+OUTLINE_OFF = (156, 163, 175, 255)   # gray-400 (readable on light + dark toolbars)
 
 
 def draw_active(size: int) -> Image.Image:

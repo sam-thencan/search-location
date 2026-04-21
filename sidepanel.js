@@ -36,6 +36,10 @@ const els = {
   shareUrl: $('share-url'),
   copyUrlBtn: $('copy-url-btn'),
   tabStatus: $('tab-status'),
+  themeToggle: $('theme-toggle'),
+  themeIconDark: $('theme-icon-dark'),
+  themeIconLight: $('theme-icon-light'),
+  advancedSection: $('advanced-section'),
   toast: $('toast')
 };
 
@@ -48,8 +52,10 @@ init();
 
 async function init() {
   state = await getState();
+  applyTheme(state.settings?.theme);
   hydrateFromState();
   attachListeners();
+  exposeDevHelpers();
   await refreshUulePreview();
 
   chrome.runtime.onMessage.addListener((msg) => {
@@ -245,6 +251,7 @@ function attachListeners() {
   els.savePresetBtn.addEventListener('click', onSavePreset);
 
   els.copyUrlBtn.addEventListener('click', onCopyShareUrl);
+  els.themeToggle?.addEventListener('click', onThemeToggle);
 }
 
 async function onCopyShareUrl() {
@@ -361,12 +368,17 @@ async function onGeocode() {
     els.lng.value = hit.lng;
     els.address.value = hit.address;
     await persistFormToState();
-    await pushRecent({ address: hit.address, lat: hit.lat, lng: hit.lng });
+    await pushRecent({
+      address: hit.address,
+      lat: hit.lat,
+      lng: hit.lng,
+      components: hit.components
+    });
     if (state.activeState?.enabled) {
       const form = readForm();
       const res = await chrome.runtime.sendMessage({ type: 'ENABLE', payload: form });
       if (res?.ok) {
-        showToast(`Spoof moved to ${hit.address.split(',')[0]}.`);
+        showToast(`Spoof moved to ${cityStateLabel(hit)}.`);
       } else {
         showToast(res?.error || 'Failed to re-apply spoof.', true);
       }
@@ -394,7 +406,7 @@ async function onReverseGeocode() {
     const hit = await reverseGeocode(lat, lng, { googleApiKey: key });
     els.address.value = hit.address;
     await persistFormToState();
-    await pushRecent({ address: hit.address, lat, lng });
+    await pushRecent({ address: hit.address, lat, lng, components: hit.components });
   } catch (err) {
     const msg = err instanceof GeocodeError ? err.message : 'Reverse geocoding failed.';
     showToast(msg, true);
@@ -503,7 +515,11 @@ async function onSavePreset() {
     showToast('Enter lat/lng before saving.', true);
     return;
   }
-  const name = prompt('Preset name:', form.address || `${form.lat.toFixed(3)}, ${form.lng.toFixed(3)}`);
+  const matchingRecent = (state.recents || []).find((r) => r.address === form.address);
+  const components = matchingRecent?.components;
+  const suggested = cityStateLabel({ address: form.address, components }) ||
+    `${form.lat.toFixed(3)}, ${form.lng.toFixed(3)}`;
+  const name = prompt('Preset name:', suggested);
   if (!name) return;
   const id = crypto.randomUUID();
   state = await updateState((s) => ({
@@ -519,6 +535,7 @@ async function onSavePreset() {
         hl: form.hl,
         gl: form.gl,
         radius: form.radius,
+        components,
         createdAt: Date.now()
       }
     ]
@@ -549,7 +566,7 @@ async function deletePreset(id) {
   renderPresets();
 }
 
-async function pushRecent({ address, lat, lng }) {
+async function pushRecent({ address, lat, lng, components }) {
   if (!address || lat == null || lng == null) return;
   state = await updateState((s) => {
     const without = (s.recents || []).filter(
@@ -557,17 +574,28 @@ async function pushRecent({ address, lat, lng }) {
     );
     return {
       ...s,
-      recents: [{ address, lat, lng, at: Date.now() }, ...without].slice(0, 5)
+      recents: [{ address, lat, lng, components, at: Date.now() }, ...without].slice(0, 5)
     };
   });
   renderRecents();
 }
 
-function shortLabel(addr) {
+function cityStateLabel(item) {
+  if (item?.components) {
+    const { city, state } = item.components;
+    if (city && state) return `${city}, ${state}`;
+    if (city) return city;
+    if (state) return state;
+  }
+  const addr = item?.address || (typeof item === 'string' ? item : '');
   if (!addr) return '';
   const parts = addr.split(',').map((p) => p.trim()).filter(Boolean);
-  if (parts.length <= 2) return addr;
-  return parts.slice(0, 2).join(', ');
+  if (parts.length === 0) return addr;
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return parts.join(', ');
+  const last = parts[parts.length - 1];
+  const looksLikeCountry = /^[A-Za-z\s]+$/.test(last) && last.length > 2;
+  return parts[0] + ', ' + (looksLikeCountry ? parts[parts.length - 2] : parts[1]);
 }
 
 function renderRecents() {
@@ -583,7 +611,7 @@ function renderRecents() {
     chip.type = 'button';
     chip.className = 'recent-chip';
     chip.title = r.address;
-    chip.textContent = shortLabel(r.address);
+    chip.textContent = cityStateLabel(r);
     chip.addEventListener('click', () => applyRecent(r));
     els.recentsRow.appendChild(chip);
   });
@@ -597,9 +625,9 @@ async function applyRecent(r) {
   if (state.activeState?.enabled) {
     const form = readForm();
     const res = await chrome.runtime.sendMessage({ type: 'ENABLE', payload: form });
-    if (res?.ok) showToast(`Spoof moved to ${shortLabel(r.address)}.`);
+    if (res?.ok) showToast(`Spoof moved to ${cityStateLabel(r)}.`);
   } else {
-    showToast(`Loaded: ${shortLabel(r.address)}`);
+    showToast(`Loaded: ${cityStateLabel(r)}`);
   }
 }
 
@@ -658,7 +686,12 @@ function setupAutocomplete() {
     els.lng.value = item.lng;
     close();
     await persistFormToState();
-    await pushRecent({ address: item.label, lat: item.lat, lng: item.lng });
+    await pushRecent({
+      address: item.label,
+      lat: item.lat,
+      lng: item.lng,
+      components: item.components
+    });
     if (state.activeState?.enabled) {
       const form = readForm();
       const res = await chrome.runtime.sendMessage({ type: 'ENABLE', payload: form });
@@ -712,6 +745,48 @@ function setupAutocomplete() {
   els.address.addEventListener('blur', () => {
     setTimeout(close, 150);
   });
+}
+
+function systemTheme() {
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+function applyTheme(saved) {
+  const theme = saved === 'dark' || saved === 'light' ? saved : systemTheme();
+  document.documentElement.setAttribute('data-theme', theme);
+  const isDark = theme === 'dark';
+  if (els.themeIconDark) els.themeIconDark.hidden = isDark;
+  if (els.themeIconLight) els.themeIconLight.hidden = !isDark;
+}
+
+async function onThemeToggle() {
+  const current = document.documentElement.getAttribute('data-theme') || systemTheme();
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  state = await updateState((s) => ({
+    ...s,
+    settings: { ...s.settings, theme: next }
+  }));
+}
+
+function exposeDevHelpers() {
+  window.__lspShowAdvanced = () => {
+    if (els.advancedSection) {
+      els.advancedSection.hidden = false;
+      console.log('[lsp] Advanced mode visible. Close and reopen panel to hide.');
+    }
+  };
+  console.log(
+    '%c[Local SERP]%c Advanced mode hidden. Run %c__lspShowAdvanced()%c to reveal it.',
+    'color:#EF6A47;font-weight:bold',
+    'color:inherit',
+    'font-family:monospace',
+    'color:inherit'
+  );
 }
 
 let toastTimer = null;

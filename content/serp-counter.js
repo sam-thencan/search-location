@@ -40,7 +40,6 @@
     '[jsname="yEVEwb"]',
     '.related-question-pair',
     '[data-initq]',
-    '.ULSxyf',
     '.xpdopen',
     '.Kevs9',
     '.kp-blk',

@@ -330,9 +330,26 @@
     };
   }
 
-  if (typeof window !== 'undefined') {
-    window.__lspDebug = debugDump;
-  }
+  // Bridge from MAIN world. content/debug-bridge.js exposes
+  // window.__lspDebug() in the page's main world; it postMessages a request
+  // here, we run debugDump in this isolated world (where it has access to
+  // the closure state), and post the result back. window.postMessage is
+  // shared across worlds, so this is the cleanest cross-world data channel.
+  window.addEventListener('message', (e) => {
+    if (e.source !== window) return;
+    const data = e.data;
+    if (!data || typeof data.__lsp_debug_request !== 'string') return;
+    let payload;
+    try {
+      payload = debugDump();
+    } catch (err) {
+      payload = { error: String(err?.message || err) };
+    }
+    window.postMessage(
+      { __lsp_debug_response: data.__lsp_debug_request, payload },
+      '*'
+    );
+  });
 
   function clearBadges() {
     document.querySelectorAll('.' + BADGE_CLASS).forEach((el) => el.remove());

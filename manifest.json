@@ -62,6 +62,26 @@
       "js": ["content/serp-counter.js"],
       "css": ["content/serp-counter.css"],
       "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "*://www.google.com/search*",
+        "*://www.google.co.uk/search*",
+        "*://www.google.de/search*",
+        "*://www.google.fr/search*",
+        "*://www.google.ca/search*",
+        "*://www.google.com.au/search*",
+        "*://www.google.es/search*",
+        "*://www.google.it/search*",
+        "*://www.google.com.mx/search*",
+        "*://www.google.com.br/search*",
+        "*://www.google.co.in/search*",
+        "*://www.google.co.jp/search*",
+        "*://www.google.co.nz/search*"
+      ],
+      "js": ["content/debug-bridge.js"],
+      "world": "MAIN",
+      "run_at": "document_end"
     }
   ],
   "action": {

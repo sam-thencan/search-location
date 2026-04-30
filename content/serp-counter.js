@@ -25,11 +25,18 @@
 
   const SKIP_ANCESTORS = [
     '[data-text-ad]',
+    '[data-text-ad="1"]',
     '#tads',
     '#tadsb',
     '#bottomads',
     '[aria-label="Ads"]',
+    '[aria-label="Ad"]',
+    '[aria-label*="Sponsored"]',
     '.commercial-unit-desktop-top',
+    '.commercial-unit-mobile-top',
+    '.commercial-unit-mobile-bottom',
+    '.cu-container',
+    '[data-async-context*="ad"]',
     '[jsname="yEVEwb"]',
     '.related-question-pair',
     '[data-initq]',
@@ -39,6 +46,27 @@
     '.kp-blk',
     '.g-blk'
   ];
+
+  const SPONSORED_LABEL_RE = /^\s*sponsored\b/i;
+
+  /**
+   * Fallback heuristic for sponsored blocks (local-services ads, etc.) where
+   * Google's structural markers vary. Walks up from the h3 and checks the
+   * leading text of each ancestor — if any ancestor starts with the literal
+   * word "Sponsored", treat it as a sponsored block. English-only, but LSA
+   * always emits this label visibly above the cards.
+   */
+  function isInsideSponsoredBlock(h3) {
+    let node = h3.parentElement;
+    let depth = 0;
+    while (node && depth < 10) {
+      const head = (node.textContent || '').trim().slice(0, 60);
+      if (head && SPONSORED_LABEL_RE.test(head)) return true;
+      node = node.parentElement;
+      depth++;
+    }
+    return false;
+  }
 
   let enabled = false;
   let observer = null;
@@ -221,6 +249,7 @@
       if (seen.has(h3)) continue;
       if (!h3.textContent.trim()) continue;
       if (SKIP_ANCESTORS.some((sel) => h3.closest(sel))) continue;
+      if (isInsideSponsoredBlock(h3)) continue;
 
       const a = findLinkedAnchor(h3);
       if (!isExternalLink(a)) continue;
@@ -254,12 +283,13 @@
         .map((h) => {
           const a = findLinkedAnchor(h);
           const skip = SKIP_ANCESTORS.find((sel) => h.closest(sel));
+          const sponsored = !skip && isInsideSponsoredBlock(h);
           return {
             text: h.textContent.trim().slice(0, 60),
             hasAnchor: !!a,
             anchorExternal: !!a && isExternalLink(a),
             anchorHref: a?.href || null,
-            skippedBy: skip || null,
+            skippedBy: skip || (sponsored ? 'sponsored-label' : null),
             zeroSize:
               h.getBoundingClientRect().width === 0 &&
               h.getBoundingClientRect().height === 0,

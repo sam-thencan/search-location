@@ -161,13 +161,24 @@
   }
 
   /**
-   * Walk up from an <h3> until the immediate parent is the results column
-   * (#rso / #search / #center_col). Returns the topmost container under that
-   * column that holds this h3 — i.e. the "organic result block." All h3s
-   * inside the same result block (main title + sitelink titles) share this
-   * reference, which lets us number only the first per block.
+   * Identify the "organic result block" an <h3> belongs to. All h3s inside
+   * the same block (main title + sitelink titles) share this reference, so
+   * we number only the first per block.
+   *
+   * Primary signal: the closest [data-hveid] ancestor. Google sets that
+   * attribute on each top-level organic result for click tracking; sitelinks
+   * inherit the parent's hveid rather than getting their own, which happens
+   * to be exactly the boundary we want.
+   *
+   * Fallback (when no data-hveid is found, e.g. unusual SERP layouts): walk
+   * up until the immediate parent is the results column. Less reliable when
+   * Google nests an extra wrapper between the column and the result blocks
+   * (GBP self-search panels do this), which is why hveid is preferred.
    */
   function findResultBlock(h3) {
+    const byHveid = h3.closest('[data-hveid]');
+    if (byHveid) return byHveid;
+
     let node = h3;
     let parent = node.parentElement;
     let safety = 25;

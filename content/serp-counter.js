@@ -216,9 +216,10 @@
 
     const seen = new Set();
     const out = [];
-    // Tracked as an array (not a Set) so we can run .contains() against each
-    // claimed block when deciding whether the next candidate is a sitelink.
-    const claimedHveidBlocks = [];
+    // Tracked as an array of { block, hostname } so we can run both a
+    // .contains() check (for nested-hveid sitelinks) and an immediately-
+    // previous-domain check (for sibling-hveid sitelinks).
+    const claimed = [];
 
     for (const h3 of root.querySelectorAll('h3')) {
       if (seen.has(h3)) continue;
@@ -240,23 +241,33 @@
       const rect = h3.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) continue;
 
-      // Already counted this exact hveid block (e.g. main title + a second
-      // h3 inside the same result's body).
-      if (claimedHveidBlocks.includes(myBlock)) continue;
+      // Sitelink #1 — same exact hveid block as a previously-claimed result.
+      if (claimed.some((c) => c.block === myBlock)) continue;
 
-      // Sitelink check: if my hveid block is *nested inside* a hveid block we
-      // already counted, I'm a sitelink of that organic result, not a new
-      // one. Done with .contains() on the innermost hveid so we don't have
-      // to walk up to the topmost (which gets fooled by page-level wrappers
-      // that Google sometimes adds around the entire results column).
-      if (
-        claimedHveidBlocks.some(
-          (claimed) => claimed !== myBlock && claimed.contains(myBlock)
-        )
-      )
+      // Sitelink #2 — my hveid block is *nested inside* a previously-claimed
+      // block (the brand SERP case where featured sitelinks have their own
+      // hveid nested inside the main result's hveid).
+      if (claimed.some((c) => c.block !== myBlock && c.block.contains(myBlock))) continue;
+
+      // Sitelink #3 — my hveid block is a *sibling* of the previous block
+      // and points at the same domain. This is the "More results from
+      // brand.com »" pattern: Google puts the sitelinks ('Contact Us',
+      // 'Our services') in their own hveid block adjacent to the main
+      // result's hveid, not nested inside it. Same-domain-as-previous is
+      // a reliable signal because Google groups sitelinks immediately
+      // after the main result they extend.
+      let myHostname = '';
+      try {
+        myHostname = new URL(a.href, location.href).hostname.toLowerCase();
+      } catch {
+        /* malformed url */
+      }
+      const last = claimed[claimed.length - 1];
+      if (last && last.hostname && myHostname && last.hostname === myHostname) {
         continue;
+      }
 
-      claimedHveidBlocks.push(myBlock);
+      claimed.push({ block: myBlock, hostname: myHostname });
       seen.add(h3);
       out.push(h3);
     }
@@ -267,8 +278,20 @@
   function debugDump() {
     const allH3s = Array.from(document.querySelectorAll('h3'));
     const organic = findOrganicH3s();
-    const claimedBlocks = organic
-      .map((h) => h.closest('[data-hveid]'))
+    const claimedMeta = organic
+      .map((h) => {
+        const block = h.closest('[data-hveid]');
+        const a = findLinkedAnchor(h);
+        let hostname = '';
+        if (a) {
+          try {
+            hostname = new URL(a.href, location.href).hostname.toLowerCase();
+          } catch {
+            /* skip */
+          }
+        }
+        return block ? { block, hostname } : null;
+      })
       .filter(Boolean);
     return {
       enabled,
@@ -279,16 +302,38 @@
       organicTexts: organic.map((h) => h.textContent.trim().slice(0, 60)),
       rejectedH3s: allH3s
         .filter((h) => !organic.includes(h))
-        .map((h) => {
+        .map((h, idx, rejected) => {
           const a = findLinkedAnchor(h);
           const skip = SKIP_ANCESTORS.find((sel) => h.closest(sel));
           const sponsored = !skip && isInsideSponsoredBlock(h);
           const myBlock = !skip && !sponsored ? h.closest('[data-hveid]') : null;
           const noHveid = !skip && !sponsored && !myBlock;
+          const isDuplicateBlock =
+            myBlock && claimedMeta.some((c) => c.block === myBlock);
           const isSitelinkOfClaimed =
             myBlock &&
-            claimedBlocks.some((c) => c !== myBlock && c.contains(myBlock));
-          const isDuplicateBlock = myBlock && claimedBlocks.includes(myBlock);
+            !isDuplicateBlock &&
+            claimedMeta.some(
+              (c) => c.block !== myBlock && c.block.contains(myBlock)
+            );
+          let myHost = '';
+          if (a) {
+            try {
+              myHost = new URL(a.href, location.href).hostname.toLowerCase();
+            } catch {
+              /* skip */
+            }
+          }
+          // Sibling-of-same-domain detection — does my position in document
+          // order put me right after a claimed block with the same hostname?
+          const sameDomainAsLast =
+            myBlock &&
+            !isDuplicateBlock &&
+            !isSitelinkOfClaimed &&
+            myHost &&
+            claimedMeta.some(
+              (c, i) => i === claimedMeta.length - 1 && c.hostname === myHost
+            );
           return {
             text: h.textContent.trim().slice(0, 60),
             hasAnchor: !!a,
@@ -298,8 +343,9 @@
               skip ||
               (sponsored ? 'sponsored-label' : null) ||
               (noHveid ? 'no-hveid' : null) ||
+              (isDuplicateBlock ? 'duplicate-hveid-block' : null) ||
               (isSitelinkOfClaimed ? 'sitelink-of-claimed' : null) ||
-              (isDuplicateBlock ? 'duplicate-hveid-block' : null),
+              (sameDomainAsLast ? 'same-domain-as-prev' : null),
             zeroSize:
               h.getBoundingClientRect().width === 0 &&
               h.getBoundingClientRect().height === 0,

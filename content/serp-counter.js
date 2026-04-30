@@ -194,6 +194,25 @@
     return true;
   }
 
+  /**
+   * Count h3s that *directly* belong to a given hveid block — i.e., their
+   * own closest [data-hveid] ancestor IS this block (not a nested one) —
+   * AND have an external-link anchor. Used to tell a single-result block
+   * (1 such h3) apart from a sitelinks-group block (2+ such h3s).
+   */
+  function countExternalH3sDirectlyIn(block) {
+    if (!block) return 0;
+    let n = 0;
+    for (const h of block.querySelectorAll('h3')) {
+      if (h.closest('[data-hveid]') !== block) continue;
+      const a = findLinkedAnchor(h);
+      if (!a || !isExternalLink(a)) continue;
+      if ((h.textContent || '').trim()) n++;
+      if (n >= 2) return n;
+    }
+    return n;
+  }
+
   function findLinkedAnchor(h3) {
     const closestA = h3.closest('a[href]');
     if (closestA) return closestA;
@@ -207,25 +226,41 @@
   }
 
 
-  function findOrganicH3s() {
+  /**
+   * Walk every h3 in the results column and decide whether it represents an
+   * organic result we should number. Returns both the accepted h3s (in
+   * document order) and a per-rejection reason log so the debug dump can
+   * surface accurate diagnostics.
+   *
+   * Tracked as an array of { block, hostname } so we can run both a
+   * .contains() check (nested-hveid sitelinks) and an immediately-previous-
+   * domain check (sibling-hveid sitelinks).
+   */
+  function classifyH3s() {
     const root =
       document.querySelector('#rso') ||
       document.querySelector('#search') ||
       document.querySelector('#center_col') ||
       document.body;
 
-    const seen = new Set();
-    const out = [];
-    // Tracked as an array of { block, hostname } so we can run both a
-    // .contains() check (for nested-hveid sitelinks) and an immediately-
-    // previous-domain check (for sibling-hveid sitelinks).
+    const organic = [];
+    const rejected = [];
     const claimed = [];
 
     for (const h3 of root.querySelectorAll('h3')) {
-      if (seen.has(h3)) continue;
-      if (!h3.textContent.trim()) continue;
-      if (SKIP_ANCESTORS.some((sel) => h3.closest(sel))) continue;
-      if (isInsideSponsoredBlock(h3)) continue;
+      if (!h3.textContent.trim()) {
+        rejected.push({ h3, reason: 'empty-text' });
+        continue;
+      }
+      const skipSel = SKIP_ANCESTORS.find((sel) => h3.closest(sel));
+      if (skipSel) {
+        rejected.push({ h3, reason: skipSel });
+        continue;
+      }
+      if (isInsideSponsoredBlock(h3)) {
+        rejected.push({ h3, reason: 'sponsored-label' });
+        continue;
+      }
 
       // Organic results are always inside a [data-hveid] container (Google's
       // per-result tracking marker). Knowledge panels, GBP self-management
@@ -233,29 +268,45 @@
       // alone filters out a lot of false positives like 'Your business on
       // Google' headers near external website buttons.
       const myBlock = h3.closest('[data-hveid]');
-      if (!myBlock) continue;
+      if (!myBlock) {
+        rejected.push({ h3, reason: 'no-hveid' });
+        continue;
+      }
 
       const a = findLinkedAnchor(h3);
-      if (!isExternalLink(a)) continue;
+      if (!isExternalLink(a)) {
+        rejected.push({ h3, reason: 'not-external' });
+        continue;
+      }
 
       const rect = h3.getBoundingClientRect();
-      if (rect.width === 0 && rect.height === 0) continue;
+      if (rect.width === 0 && rect.height === 0) {
+        rejected.push({ h3, reason: 'zero-size' });
+        continue;
+      }
 
       // Sitelink #1 — same exact hveid block as a previously-claimed result.
-      if (claimed.some((c) => c.block === myBlock)) continue;
+      if (claimed.some((c) => c.block === myBlock)) {
+        rejected.push({ h3, reason: 'duplicate-hveid-block' });
+        continue;
+      }
 
       // Sitelink #2 — my hveid block is *nested inside* a previously-claimed
       // block (the brand SERP case where featured sitelinks have their own
       // hveid nested inside the main result's hveid).
-      if (claimed.some((c) => c.block !== myBlock && c.block.contains(myBlock))) continue;
+      if (claimed.some((c) => c.block !== myBlock && c.block.contains(myBlock))) {
+        rejected.push({ h3, reason: 'sitelink-of-claimed' });
+        continue;
+      }
 
       // Sitelink #3 — my hveid block is a *sibling* of the previous block
-      // and points at the same domain. This is the "More results from
-      // brand.com »" pattern: Google puts the sitelinks ('Contact Us',
-      // 'Our services') in their own hveid block adjacent to the main
-      // result's hveid, not nested inside it. Same-domain-as-previous is
-      // a reliable signal because Google groups sitelinks immediately
-      // after the main result they extend.
+      // and points at the same domain, AND my block looks like a sitelinks
+      // group (it contains 2+ external-link h3s of its own). Both signals
+      // are required because two consecutive same-domain organic results
+      // (e.g. two YouTube videos for the same query) each live in their
+      // own single-h3 hveid block and SHOULD both be numbered. A real
+      // 'More results from brand.com »' sitelinks block always packs
+      // multiple titles into a single hveid container.
       let myHostname = '';
       try {
         myHostname = new URL(a.href, location.href).hostname.toLowerCase();
@@ -263,36 +314,31 @@
         /* malformed url */
       }
       const last = claimed[claimed.length - 1];
-      if (last && last.hostname && myHostname && last.hostname === myHostname) {
+      if (
+        last &&
+        last.hostname &&
+        myHostname &&
+        last.hostname === myHostname &&
+        countExternalH3sDirectlyIn(myBlock) >= 2
+      ) {
+        rejected.push({ h3, reason: 'sibling-sitelink-same-domain' });
         continue;
       }
 
       claimed.push({ block: myBlock, hostname: myHostname });
-      seen.add(h3);
-      out.push(h3);
+      organic.push(h3);
     }
 
-    return out;
+    return { organic, rejected };
+  }
+
+  function findOrganicH3s() {
+    return classifyH3s().organic;
   }
 
   function debugDump() {
     const allH3s = Array.from(document.querySelectorAll('h3'));
-    const organic = findOrganicH3s();
-    const claimedMeta = organic
-      .map((h) => {
-        const block = h.closest('[data-hveid]');
-        const a = findLinkedAnchor(h);
-        let hostname = '';
-        if (a) {
-          try {
-            hostname = new URL(a.href, location.href).hostname.toLowerCase();
-          } catch {
-            /* skip */
-          }
-        }
-        return block ? { block, hostname } : null;
-      })
-      .filter(Boolean);
+    const { organic, rejected } = classifyH3s();
     return {
       enabled,
       url: location.href,
@@ -300,59 +346,20 @@
       totalH3s: allH3s.length,
       matchedOrganic: organic.length,
       organicTexts: organic.map((h) => h.textContent.trim().slice(0, 60)),
-      rejectedH3s: allH3s
-        .filter((h) => !organic.includes(h))
-        .map((h, idx, rejected) => {
-          const a = findLinkedAnchor(h);
-          const skip = SKIP_ANCESTORS.find((sel) => h.closest(sel));
-          const sponsored = !skip && isInsideSponsoredBlock(h);
-          const myBlock = !skip && !sponsored ? h.closest('[data-hveid]') : null;
-          const noHveid = !skip && !sponsored && !myBlock;
-          const isDuplicateBlock =
-            myBlock && claimedMeta.some((c) => c.block === myBlock);
-          const isSitelinkOfClaimed =
-            myBlock &&
-            !isDuplicateBlock &&
-            claimedMeta.some(
-              (c) => c.block !== myBlock && c.block.contains(myBlock)
-            );
-          let myHost = '';
-          if (a) {
-            try {
-              myHost = new URL(a.href, location.href).hostname.toLowerCase();
-            } catch {
-              /* skip */
-            }
-          }
-          // Sibling-of-same-domain detection — does my position in document
-          // order put me right after a claimed block with the same hostname?
-          const sameDomainAsLast =
-            myBlock &&
-            !isDuplicateBlock &&
-            !isSitelinkOfClaimed &&
-            myHost &&
-            claimedMeta.some(
-              (c, i) => i === claimedMeta.length - 1 && c.hostname === myHost
-            );
-          return {
-            text: h.textContent.trim().slice(0, 60),
-            hasAnchor: !!a,
-            anchorExternal: !!a && isExternalLink(a),
-            anchorHref: a?.href || null,
-            skippedBy:
-              skip ||
-              (sponsored ? 'sponsored-label' : null) ||
-              (noHveid ? 'no-hveid' : null) ||
-              (isDuplicateBlock ? 'duplicate-hveid-block' : null) ||
-              (isSitelinkOfClaimed ? 'sitelink-of-claimed' : null) ||
-              (sameDomainAsLast ? 'same-domain-as-prev' : null),
-            zeroSize:
-              h.getBoundingClientRect().width === 0 &&
-              h.getBoundingClientRect().height === 0,
-            parentTag: h.parentElement?.tagName,
-            parentClass: h.parentElement?.className || null
-          };
-        })
+      rejectedH3s: rejected.map(({ h3, reason }) => {
+        const a = findLinkedAnchor(h3);
+        const rect = h3.getBoundingClientRect();
+        return {
+          text: h3.textContent.trim().slice(0, 60),
+          hasAnchor: !!a,
+          anchorExternal: !!a && isExternalLink(a),
+          anchorHref: a?.href || null,
+          skippedBy: reason,
+          zeroSize: rect.width === 0 && rect.height === 0,
+          parentTag: h3.parentElement?.tagName,
+          parentClass: h3.parentElement?.className || null
+        };
+      })
     };
   }
 

@@ -48,20 +48,39 @@
   ];
 
   const SPONSORED_LABEL_RE = /^\s*sponsored\b/i;
+  const SPONSORED_LABEL_MAX_LEN = 80;
+
+  function looksLikeSponsoredLabel(el) {
+    if (!el) return false;
+    const text = (el.textContent || '').trim();
+    return text.length > 0 && text.length < SPONSORED_LABEL_MAX_LEN && SPONSORED_LABEL_RE.test(text);
+  }
 
   /**
-   * Fallback heuristic for sponsored blocks (local-services ads, etc.) where
-   * Google's structural markers vary. Walks up from the h3 and checks the
-   * leading text of each ancestor — if any ancestor starts with the literal
-   * word "Sponsored", treat it as a sponsored block. English-only, but LSA
-   * always emits this label visibly above the cards.
+   * Fallback heuristic for sponsored blocks (local-services ads, "Sponsored
+   * result" boxes) where Google's structural markers vary. Walks up from the
+   * h3 and looks for a *short* "Sponsored …" label — either the ancestor's
+   * first element child (header inside the block) or its previous sibling
+   * (header before the block).
+   *
+   * Both the short-text requirement and the sibling/first-child constraint
+   * are important: a naive "any ancestor's textContent starts with
+   * Sponsored" check fires for every h3 on the page when the LSA block is
+   * the first thing in the column, because the column's textContent starts
+   * with the LSA's leading "Sponsored" too.
+   *
+   * Bounded at depth 8 and stops at the column root.
    */
   function isInsideSponsoredBlock(h3) {
     let node = h3.parentElement;
     let depth = 0;
-    while (node && depth < 10) {
-      const head = (node.textContent || '').trim().slice(0, 60);
-      if (head && SPONSORED_LABEL_RE.test(head)) return true;
+    while (node && depth < 8) {
+      const id = node.id;
+      if (id === 'rso' || id === 'search' || id === 'center_col') break;
+
+      if (looksLikeSponsoredLabel(node.firstElementChild)) return true;
+      if (looksLikeSponsoredLabel(node.previousElementSibling)) return true;
+
       node = node.parentElement;
       depth++;
     }
@@ -251,6 +270,13 @@
       if (SKIP_ANCESTORS.some((sel) => h3.closest(sel))) continue;
       if (isInsideSponsoredBlock(h3)) continue;
 
+      // Organic results are always inside a [data-hveid] container (Google's
+      // per-result tracking marker). Knowledge panels, GBP self-management
+      // widgets, and chrome around the SERP don't have data-hveid, so this
+      // alone filters out a lot of false positives like 'Your business on
+      // Google' headers near external website buttons.
+      if (!h3.closest('[data-hveid]')) continue;
+
       const a = findLinkedAnchor(h3);
       if (!isExternalLink(a)) continue;
 
@@ -284,12 +310,16 @@
           const a = findLinkedAnchor(h);
           const skip = SKIP_ANCESTORS.find((sel) => h.closest(sel));
           const sponsored = !skip && isInsideSponsoredBlock(h);
+          const noHveid = !skip && !sponsored && !h.closest('[data-hveid]');
           return {
             text: h.textContent.trim().slice(0, 60),
             hasAnchor: !!a,
             anchorExternal: !!a && isExternalLink(a),
             anchorHref: a?.href || null,
-            skippedBy: skip || (sponsored ? 'sponsored-label' : null),
+            skippedBy:
+              skip ||
+              (sponsored ? 'sponsored-label' : null) ||
+              (noHveid ? 'no-hveid' : null),
             zeroSize:
               h.getBoundingClientRect().width === 0 &&
               h.getBoundingClientRect().height === 0,

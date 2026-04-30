@@ -206,51 +206,6 @@
     return null;
   }
 
-  /**
-   * Identify the "organic result block" an <h3> belongs to. All h3s inside
-   * the same block (main title + every sitelink title) share this reference,
-   * so we number only the first per block.
-   *
-   * Primary signal: the TOPMOST [data-hveid] ancestor below the results
-   * column. Google sets data-hveid on each top-level organic result for
-   * click tracking, AND on featured sitelinks within those results (other
-   * sitelinks have no hveid at all). Closest-hveid would hand the featured
-   * sitelink its own block; topmost-hveid pulls every sitelink, featured or
-   * not, back to the main result's outer hveid.
-   *
-   * The walk is bounded by the column (#rso / #search / #center_col) so an
-   * outer page-level hveid wrapper, if Google ever introduces one, doesn't
-   * collapse unrelated organic results into a single block.
-   *
-   * Fallback (no data-hveid in the chain, unusual layouts): walk up until
-   * the parent is the column.
-   */
-  function findResultBlock(h3) {
-    let topmost = null;
-    let node = h3;
-    while (node && node !== document.body) {
-      const id = node.id;
-      if (id === 'rso' || id === 'search' || id === 'center_col') break;
-      if (node.hasAttribute && node.hasAttribute('data-hveid')) {
-        topmost = node;
-      }
-      node = node.parentElement;
-    }
-    if (topmost) return topmost;
-
-    let walk = h3;
-    let parent = walk.parentElement;
-    let safety = 25;
-    while (parent && safety-- > 0) {
-      const id = parent.id;
-      if (id === 'rso' || id === 'search' || id === 'center_col') {
-        return walk;
-      }
-      walk = parent;
-      parent = walk.parentElement;
-    }
-    return walk;
-  }
 
   function findOrganicH3s() {
     const root =
@@ -261,7 +216,9 @@
 
     const seen = new Set();
     const out = [];
-    const claimedBlocks = new Set();
+    // Tracked as an array (not a Set) so we can run .contains() against each
+    // claimed block when deciding whether the next candidate is a sitelink.
+    const claimedHveidBlocks = [];
 
     for (const h3 of root.querySelectorAll('h3')) {
       if (seen.has(h3)) continue;
@@ -274,7 +231,8 @@
       // widgets, and chrome around the SERP don't have data-hveid, so this
       // alone filters out a lot of false positives like 'Your business on
       // Google' headers near external website buttons.
-      if (!h3.closest('[data-hveid]')) continue;
+      const myBlock = h3.closest('[data-hveid]');
+      if (!myBlock) continue;
 
       const a = findLinkedAnchor(h3);
       if (!isExternalLink(a)) continue;
@@ -282,10 +240,23 @@
       const rect = h3.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) continue;
 
-      const block = findResultBlock(h3);
-      if (claimedBlocks.has(block)) continue;
-      claimedBlocks.add(block);
+      // Already counted this exact hveid block (e.g. main title + a second
+      // h3 inside the same result's body).
+      if (claimedHveidBlocks.includes(myBlock)) continue;
 
+      // Sitelink check: if my hveid block is *nested inside* a hveid block we
+      // already counted, I'm a sitelink of that organic result, not a new
+      // one. Done with .contains() on the innermost hveid so we don't have
+      // to walk up to the topmost (which gets fooled by page-level wrappers
+      // that Google sometimes adds around the entire results column).
+      if (
+        claimedHveidBlocks.some(
+          (claimed) => claimed !== myBlock && claimed.contains(myBlock)
+        )
+      )
+        continue;
+
+      claimedHveidBlocks.push(myBlock);
       seen.add(h3);
       out.push(h3);
     }
@@ -296,6 +267,9 @@
   function debugDump() {
     const allH3s = Array.from(document.querySelectorAll('h3'));
     const organic = findOrganicH3s();
+    const claimedBlocks = organic
+      .map((h) => h.closest('[data-hveid]'))
+      .filter(Boolean);
     return {
       enabled,
       url: location.href,
@@ -309,7 +283,12 @@
           const a = findLinkedAnchor(h);
           const skip = SKIP_ANCESTORS.find((sel) => h.closest(sel));
           const sponsored = !skip && isInsideSponsoredBlock(h);
-          const noHveid = !skip && !sponsored && !h.closest('[data-hveid]');
+          const myBlock = !skip && !sponsored ? h.closest('[data-hveid]') : null;
+          const noHveid = !skip && !sponsored && !myBlock;
+          const isSitelinkOfClaimed =
+            myBlock &&
+            claimedBlocks.some((c) => c !== myBlock && c.contains(myBlock));
+          const isDuplicateBlock = myBlock && claimedBlocks.includes(myBlock);
           return {
             text: h.textContent.trim().slice(0, 60),
             hasAnchor: !!a,
@@ -318,7 +297,9 @@
             skippedBy:
               skip ||
               (sponsored ? 'sponsored-label' : null) ||
-              (noHveid ? 'no-hveid' : null),
+              (noHveid ? 'no-hveid' : null) ||
+              (isSitelinkOfClaimed ? 'sitelink-of-claimed' : null) ||
+              (isDuplicateBlock ? 'duplicate-hveid-block' : null),
             zeroSize:
               h.getBoundingClientRect().width === 0 &&
               h.getBoundingClientRect().height === 0,

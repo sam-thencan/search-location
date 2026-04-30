@@ -160,6 +160,28 @@
     return null;
   }
 
+  /**
+   * Walk up from an <h3> until the immediate parent is the results column
+   * (#rso / #search / #center_col). Returns the topmost container under that
+   * column that holds this h3 — i.e. the "organic result block." All h3s
+   * inside the same result block (main title + sitelink titles) share this
+   * reference, which lets us number only the first per block.
+   */
+  function findResultBlock(h3) {
+    let node = h3;
+    let parent = node.parentElement;
+    let safety = 25;
+    while (parent && safety-- > 0) {
+      const id = parent.id;
+      if (id === 'rso' || id === 'search' || id === 'center_col') {
+        return node;
+      }
+      node = parent;
+      parent = node.parentElement;
+    }
+    return node;
+  }
+
   function findOrganicH3s() {
     const root =
       document.querySelector('#rso') ||
@@ -169,6 +191,7 @@
 
     const seen = new Set();
     const out = [];
+    const claimedBlocks = new Set();
 
     for (const h3 of root.querySelectorAll('h3')) {
       if (seen.has(h3)) continue;
@@ -181,16 +204,13 @@
       const rect = h3.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) continue;
 
+      const block = findResultBlock(h3);
+      if (claimedBlocks.has(block)) continue;
+      claimedBlocks.add(block);
+
       seen.add(h3);
       out.push(h3);
     }
-
-    out.sort((a, b) => {
-      const pos = a.compareDocumentPosition(b);
-      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
-      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
-      return 0;
-    });
 
     return out;
   }

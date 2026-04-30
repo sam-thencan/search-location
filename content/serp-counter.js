@@ -162,35 +162,48 @@
 
   /**
    * Identify the "organic result block" an <h3> belongs to. All h3s inside
-   * the same block (main title + sitelink titles) share this reference, so
-   * we number only the first per block.
+   * the same block (main title + every sitelink title) share this reference,
+   * so we number only the first per block.
    *
-   * Primary signal: the closest [data-hveid] ancestor. Google sets that
-   * attribute on each top-level organic result for click tracking; sitelinks
-   * inherit the parent's hveid rather than getting their own, which happens
-   * to be exactly the boundary we want.
+   * Primary signal: the TOPMOST [data-hveid] ancestor below the results
+   * column. Google sets data-hveid on each top-level organic result for
+   * click tracking, AND on featured sitelinks within those results (other
+   * sitelinks have no hveid at all). Closest-hveid would hand the featured
+   * sitelink its own block; topmost-hveid pulls every sitelink, featured or
+   * not, back to the main result's outer hveid.
    *
-   * Fallback (when no data-hveid is found, e.g. unusual SERP layouts): walk
-   * up until the immediate parent is the results column. Less reliable when
-   * Google nests an extra wrapper between the column and the result blocks
-   * (GBP self-search panels do this), which is why hveid is preferred.
+   * The walk is bounded by the column (#rso / #search / #center_col) so an
+   * outer page-level hveid wrapper, if Google ever introduces one, doesn't
+   * collapse unrelated organic results into a single block.
+   *
+   * Fallback (no data-hveid in the chain, unusual layouts): walk up until
+   * the parent is the column.
    */
   function findResultBlock(h3) {
-    const byHveid = h3.closest('[data-hveid]');
-    if (byHveid) return byHveid;
-
+    let topmost = null;
     let node = h3;
-    let parent = node.parentElement;
+    while (node && node !== document.body) {
+      const id = node.id;
+      if (id === 'rso' || id === 'search' || id === 'center_col') break;
+      if (node.hasAttribute && node.hasAttribute('data-hveid')) {
+        topmost = node;
+      }
+      node = node.parentElement;
+    }
+    if (topmost) return topmost;
+
+    let walk = h3;
+    let parent = walk.parentElement;
     let safety = 25;
     while (parent && safety-- > 0) {
       const id = parent.id;
       if (id === 'rso' || id === 'search' || id === 'center_col') {
-        return node;
+        return walk;
       }
-      node = parent;
-      parent = node.parentElement;
+      walk = parent;
+      parent = walk.parentElement;
     }
-    return node;
+    return walk;
   }
 
   function findOrganicH3s() {
